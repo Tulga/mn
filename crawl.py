@@ -5,14 +5,16 @@ import threading
 
 def parse_url():
     while True:
-        url = urls.get()
+        url = urls.get(True)
         try:
             src = urllib.urlopen(url).read()
 
             links = re.findall(r"<a [^>]*href=\"([^\"]+)\"[^>]*>", src, re.M)
 
             src = src.decode("utf-8")
-            cyr_words.extend(re.findall(r"(["+cyr_chars+"]+)", src, re.M))
+            words = re.findall(r"(["+cyr_chars+"]+)", src, re.M)
+            for w in words:
+                cyr_words.put(w)
 
             if len(cyr_words) > 0:
                 for l in links:
@@ -25,16 +27,29 @@ def parse_url():
 
         urls.task_done()
 
-cyr_chars = open("mn_chars.txt").read().strip().decode("utf-8")
-cyr_words = list()
+def write_words():
+    while True:
+        w = cyr_words.get(True)
+        out.write(w + "\n")
+
+char_file = open("mn_chars.txt")
+cyr_chars = char_file.read().strip().decode("utf-8")
+char_file.close()
+cyr_words = Queue.Queue()
 urls = Queue.Queue()
 urls.put("http://www.gogo.mn")
 
 workers = list()
-for i in range(10):
+for i in range(100):
     worker = threading.Thread(target = parse_url)
     worker.setDaemon(True)
     worker.start()
     workers.append(worker)
 
+out = open("./output.txt", "w")
+writer = threading.Thread(target = write_words)
+writer.setDaemon(True)
+writer.start()
+
 urls.join()
+out.close()
